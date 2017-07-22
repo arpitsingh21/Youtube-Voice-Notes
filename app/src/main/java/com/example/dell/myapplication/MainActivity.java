@@ -1,15 +1,20 @@
 package com.example.dell.myapplication;
 
+import android.Manifest;
 import android.app.ProgressDialog;
+import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.speech.tts.TextToSpeech;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.os.CountDownTimer;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.speech.RecognizerIntent;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -20,6 +25,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -31,8 +37,18 @@ import com.google.android.youtube.player.YouTubeInitializationResult;
 import com.google.android.youtube.player.YouTubePlayer;
 import com.google.android.youtube.player.YouTubePlayerView;
 
+import net.gotev.speech.GoogleVoiceTypingDisabledException;
+import net.gotev.speech.Speech;
+import net.gotev.speech.SpeechDelegate;
+import net.gotev.speech.SpeechRecognitionNotAvailable;
+import net.gotev.speech.ui.SpeechProgressView;
+
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 import static android.Manifest.permission.RECORD_AUDIO;
 import static android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
@@ -44,70 +60,112 @@ public class MainActivity extends YouTubeBaseActivity implements YouTubePlayer.O
     private YouTubePlayerView youTubeView;
 Button b;
     ListView listView ;
-    ImageButton play,stop;
+    ImageButton recordbtn;
     String h;
     int seek=0,count=0;
     File[] filelist;
     String[] values;
+
     ArrayAdapter<String> adapter;
     EditText t;
-    MediaRecorder mediaRecorder;
+    ArrayList<String>audiolist;
+    String text=null;
+    TextView speechtext;
+    private final int REQ_CODE_SPEECH_INPUT = 100;
+
     private MyPlayerStateChangeListener playerStateChangeListener;
     private MyPlaybackEventListener playbackEventListener;
     private YouTubePlayer player;
+    TextToSpeech t1;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         youTubeView = (YouTubePlayerView) findViewById(R.id.youtube_view);
         youTubeView.initialize(Config.YOUTUBE_API_KEY, MainActivity.this);
-        listView = (ListView) findViewById(R.id.list);
-        mediaRecorder = new MediaRecorder();
-        File f=new File(getExternalStorageDirectory().toString()+"/PlayerFiles/");
-        f.mkdirs();
-       // Toast.makeText(this, getExternalStorageDirectory().getAbsolutePath()+"", Toast.LENGTH_SHORT).show();
-try {
-      File dir = new File(getExternalStorageDirectory().getAbsolutePath()+"/PlayerFiles/");
-      filelist = dir.listFiles();
-      values = new String[filelist.length];
-      for (int i = 0; i < values.length; i++) {
-          values[i] = filelist[i].getName();
-       }
-      adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, android.R.id.text1, values);
-      listView.setAdapter(adapter);
-     }
-        catch(Exception e)
-        {
+        t1=new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                if(status != TextToSpeech.ERROR) {
+                    t1.setLanguage(Locale.UK);
+                }
+            }
+        });
 
-            e.printStackTrace();
+        audiolist = new ArrayList<String>();
+
+        speechtext=(TextView)findViewById(R.id.textView2);
+
+        listView = (ListView) findViewById(R.id.list);
+        recordbtn=(ImageButton)findViewById(R.id.imageButton2);
+        recordbtn.setClickable(false);
+        adapter = new ArrayAdapter<String>(MainActivity.this, android.R.layout.simple_list_item_1, android.R.id.text1, audiolist);
+        recordbtn.setOnClickListener(new View.OnClickListener() {
+         @Override
+         public void onClick(View v) {
+             askSpeechInput();
+         }
+           });
+      // Toast.makeText(this, getExternalStorageDirectory().getAbsolutePath()+"", Toast.LENGTH_SHORT).show();
+        File dir = new File(Environment.getExternalStorageDirectory()+"/Audiofiles/");
+        if(!dir.exists())
+        {
+            dir.mkdirs();
         }
+
+        filelist = dir.listFiles();
+
+        if(filelist!=null) {
+            String[] theNamesOfFiles = new String[filelist.length];
+            for (int i = 0; i < theNamesOfFiles.length; i++) {
+                audiolist.add(filelist[i].getName());
+
+            }
+            listView.setAdapter(adapter);
+
+        }
+
+
+
+
+
+
         t=(EditText) findViewById(R.id.textView);
         b=(Button)findViewById(R.id.button);
-        play=(ImageButton)findViewById(R.id.imageButton);
-        play.setClickable(false);
-        play.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                play.setClickable(false);
-                stop.setClickable(true);
-                player.pause();
-                int n=player.getCurrentTimeMillis();
-                recordAudio(h+"@"+n/1000);
-            }
-        });
-        stop=(ImageButton)findViewById(R.id.imageButton2) ;
-        stop.setClickable(false);
-        stop.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-            player.play();
-                mediaRecorder.stop();
-                stop.setEnabled(false);
-                play.setEnabled(true);
-                Toast.makeText(MainActivity.this, "Recording Completed", Toast.LENGTH_LONG).show();
-                adapter.notifyDataSetChanged();
-            }
-        });
         b.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -126,7 +184,7 @@ if(player==null)
 else{
     h=t.getText().toString();
     h=h.substring(h.indexOf("?v=")+3);
-//            Toast.makeText(MainActivity.this,h+"", Toast.LENGTH_SHORT).show();
+
 
     player.cueVideo(h);
 seek=0;
@@ -142,61 +200,31 @@ seek=0;
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
 
-               // playSong(filelist[position]+"",filelist[position].getName());
+                String h= (String)listView.getItemAtPosition(position);
+                String videoid=h.substring(0,h.lastIndexOf("@"));
 
-                try {
-String name=filelist[position].getName();
-                    t.setText("https://www.youtube.com/watch?v="+name.substring(0,name.indexOf("@")));
+                String time=h.substring(h.indexOf("@")+1,h.indexOf("\n"));
 
-                  final  String h=name.substring(0,name.indexOf("@"));
-                    // youTubeView.initialize(Config.YOUTUBE_API_KEY, MainActivity.this);
+                String speak= h.substring(h.indexOf("\n"));
+               // Toast.makeText(MainActivity.this, time+"  "+videoid, Toast.LENGTH_SHORT).show();
 
-                   //
-                    // player.cueVideo(name.substring(0,name.indexOf("@")));
-//player.play();
-
-                     seek=Integer.parseInt(name.substring(name.indexOf("@")+1,name.indexOf(".")))*1000;
-                   // Toast.makeText(MainActivity.this, seek+"", Toast.LENGTH_SHORT).show();
-
-            // Toast.makeText(this, songPath+"", Toast.LENGTH_SHORT).show();
-            MediaPlayer mp = new MediaPlayer();
-            mp.reset();
-
-            mp.setDataSource(filelist[position]+"");
-
-            mp.prepare();
+                t1.speak(speak, TextToSpeech.QUEUE_FLUSH, null);
+                // Toast.makeText(MainActivity.this,h+vi "", Toast.LENGTH_SHORT).show();
+                seek=Integer.parseInt(time)*1000;
+                  player.cueVideo(videoid);
+                 player.seekToMillis(seek);
+                player.play();
 
 
-            mp.start();
-            int n= mp.getDuration();
-//            Toast.makeText(this,name.substring(0,name.indexOf("@"))+""+n/1000, Toast.LENGTH_SHORT).show();
-
-                    new CountDownTimer(n, 1000) {
-
-                        public void onTick(long millisUntilFinished) {
-
-
-                        }
-
-                        public void onFinish() {
-
-                            player.cueVideo(h);
-                            player.seekToMillis(seek);
-                        }
-                    }.start();
-
-
-
-
-                } catch (Exception e) {
-                    Log.v(getString(R.string.app_name), e.getMessage());
-                }
 
 
 
             }
         });
+
     }
+
+
     @Override
     public void onInitializationSuccess(YouTubePlayer.Provider provider, YouTubePlayer player, boolean wasRestored) {
         this.player = player;
@@ -227,10 +255,25 @@ String name=filelist[position].getName();
         if (requestCode == RECOVERY_REQUEST) {
             // Retry initialization if user performed a recovery action
             getYouTubePlayerProvider().initialize(Config.YOUTUBE_API_KEY, this);
+        } else if (requestCode==REQ_CODE_SPEECH_INPUT) {
+
+            if (resultCode == RESULT_OK && null != data) {
+
+                ArrayList<String> result = data
+                        .getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                speechtext.setText(result.get(0));
+                text=result.get(0);
+player.play();
+                recordbtn.setClickable(true);
+                savedetails();
+
+
+
+            }
+
         }
+
     }
-
-
 
     protected YouTubePlayer.Provider getYouTubePlayerProvider() {
         return youTubeView;
@@ -246,7 +289,7 @@ String name=filelist[position].getName();
         public void onPlaying() {
             // Called when playback starts, either due to user action or call to play().
            // showMessage("Playing");
-            play.setClickable(true);
+
 
 
 
@@ -301,11 +344,13 @@ String name=filelist[position].getName();
         @Override
         public void onAdStarted() {
             // Called when playback of an advertisement starts.
+       recordbtn.setClickable(false);
         }
 
         @Override
         public void onVideoStarted() {
             // Called when playback of the video starts.
+            recordbtn.setClickable(true);
         }
 
         @Override
@@ -321,47 +366,9 @@ String name=filelist[position].getName();
     }
 
 
-    public void recordAudio(String fileName) {
-
-
-        if(checkPermission()) {
-
-            String AudioSavePathInDevice =
-                    getExternalStorageDirectory().getAbsolutePath() + "/PlayerFiles/" +fileName+".3gp";
 
 
 
-            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
-            mediaRecorder.setAudioEncoder(MediaRecorder.OutputFormat.AMR_NB);
-            mediaRecorder.setOutputFile(AudioSavePathInDevice);
-            Toast.makeText(this, AudioSavePathInDevice+"", Toast.LENGTH_SHORT).show();
-            try {
-                mediaRecorder.prepare();
-                mediaRecorder.start();
-            } catch (IllegalStateException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            } catch (IOException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
-
-
-            Toast.makeText(MainActivity.this, "Recording started",
-                    Toast.LENGTH_LONG).show();
-
-        }
-        else{
-            Toast.makeText(MainActivity.this, "No permissions Granted",
-                    Toast.LENGTH_LONG).show();
-
-
-        }
-        }
-    private void playSong(String songPath,String name) {
-
-    }
 
     public boolean checkPermission() {
         int result = ContextCompat.checkSelfPermission(getApplicationContext(),
@@ -373,6 +380,76 @@ String name=filelist[position].getName();
 
     }
 
+    private void askSpeechInput() {
+try {
+
+
+    seek = player.getCurrentTimeMillis();
+    player.pause();
+    h = t.getText().toString();
+    h = h.substring(h.indexOf("?v=") + 3);
+
+    recordbtn.setClickable(false);
+
+
+    Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+    intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+    intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+    intent.putExtra(RecognizerIntent.EXTRA_PROMPT,
+            "Voice is on");
+    try {
+        startActivityForResult(intent, REQ_CODE_SPEECH_INPUT);
+    } catch (ActivityNotFoundException a) {
+
+    }
+
+
+}catch (StringIndexOutOfBoundsException e)
+{e.printStackTrace();}
+}
+
+
+  public void  savedetails() {
+
+
+      if (!text.equals("")) {
+          SharedPreferences.Editor editor = getSharedPreferences(h + "@" + seek, MODE_PRIVATE).edit();
+          editor.putString("id", h);
+          editor.putInt("time", seek);
+          editor.putString("text", text);
+          editor.apply();
+          audiolist.add(h + "@" + seek/1000 + "\n" + text);
+          adapter.notifyDataSetChanged();
+         // player.play();
+          File root = new File(Environment.getExternalStorageDirectory(), "Audiofiles");
+          if (!root.exists()) {
+              root.mkdirs();
+          }
+
+         try {
+             File filepath = new File(root,h + "@" + seek/1000 + "\n" + text);
+             FileWriter writer = new FileWriter(filepath);
+             writer.append(text);
+             writer.flush();
+             writer.close();
+         }
+         catch(IOException e){e.printStackTrace();}
+
+      }
+      else{
+          showMessage("Please try again");
+      }
+  }
+    public void fetchdetails()
+    {
+        SharedPreferences prefs = getSharedPreferences(h+"@"+seek, MODE_PRIVATE);
+        text = prefs.getString("text",null);//"No name defined" is the default value.
+        seek = prefs.getInt("time",0); //0 is the default value.
+        h=prefs.getString("id",null);
+
+
+    }
 
 
 }
